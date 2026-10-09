@@ -1,5 +1,3 @@
-from decimal import Decimal
-
 import pytest
 from alembic import command
 from alembic.config import Config
@@ -23,7 +21,7 @@ def test_binding_uniqueness_and_foreign_keys(db):
             s.add(Binding(telegram_user_id=user, athlete_id=athlete))
 
 
-def test_migrations_repeat_and_decimal_restart(db):
+def test_migrations_repeat_and_grams_restart(db):
     command.upgrade(Config("alembic.ini"), "head")
     with db.transaction() as s:
         a = Athlete(key="a", display_name="А")
@@ -37,7 +35,7 @@ def test_migrations_repeat_and_decimal_restart(db):
         session = TrainingSession(chat_id=-123, program_id=p.id, program_day_id=day.id, current_exercise_order=1, started_by_athlete_id=a.id)
         s.add_all([exercise, session])
         s.flush()
-        s.add(Result(training_session_id=session.id, program_exercise_id=exercise.id, athlete_id=a.id, planned_set_number=1, reps=8, weight_kg=Decimal("32.125"), telegram_chat_id=-123, telegram_message_id=1))
+        s.add(Result(training_session_id=session.id, program_exercise_id=exercise.id, athlete_id=a.id, planned_set_number=1, reps=8, weight_g=32125, telegram_chat_id=-123, telegram_message_id=1))
         session_values = dict(chat_id=-123, program_id=p.id, program_day_id=day.id, current_exercise_order=1, started_by_athlete_id=a.id)
     with pytest.raises(IntegrityError), db.transaction() as s:
         s.add(TrainingSession(**session_values))
@@ -46,7 +44,7 @@ def test_migrations_repeat_and_decimal_restart(db):
     reopened = Database(path)
     try:
         with reopened.transaction() as s:
-            assert s.scalar(select(Result)).weight_kg == Decimal("32.125")
+            assert s.scalar(select(Result)).weight_g == 32125
             assert s.scalar(select(TrainingSession)).status == "active"
     finally:
         reopened.close()

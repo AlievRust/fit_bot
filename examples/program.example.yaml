@@ -1,4 +1,5 @@
 schema_version: 1
+# Пример результата в Telegram: 8*32.125 — вес вводится в килограммах.
 program:
   key: strength_2026_10
   name: "Силовой блок 2026-10"

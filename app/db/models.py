@@ -1,31 +1,16 @@
 """Реляционная модель: планы отделены от результатов тренировки."""
 
 from datetime import datetime, timezone
-from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Index,
-    Integer, JSON, String, Text, UniqueConstraint, text,
+    Integer, JSON, String, UniqueConstraint, text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy.types import TypeDecorator
 
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
-
-
-class DecimalText(TypeDecorator):
-    """SQLite REAL не гарантирует точность: сохраняем десятичное число текстом."""
-
-    impl = Text
-    cache_ok = True
-
-    def process_bind_param(self, value, dialect):
-        return None if value is None else format(Decimal(value), "f")
-
-    def process_result_value(self, value, dialect):
-        return None if value is None else Decimal(value)
 
 
 class Base(DeclarativeBase):
@@ -146,6 +131,7 @@ class Result(Base):
     __tablename__ = "set_results"
     __table_args__ = (
         CheckConstraint("reps BETWEEN 1 AND 1000", name="result_reps_valid"),
+        CheckConstraint("typeof(weight_g) = 'integer' AND weight_g BETWEEN 1 AND 2000000", name="result_weight_g_valid"),
         CheckConstraint("subjective_rating IS NULL OR subjective_rating IN ('easy', 'normal', 'hard')", name="rating_valid"),
         UniqueConstraint("telegram_chat_id", "telegram_message_id", name="result_message_unique"),
         Index("one_live_planned_result", "training_session_id", "program_exercise_id", "athlete_id", "planned_set_number", unique=True, sqlite_where=text("deleted_at IS NULL")),
@@ -157,7 +143,7 @@ class Result(Base):
     athlete_id: Mapped[int] = mapped_column(ForeignKey("athletes.id"))
     planned_set_number: Mapped[int | None] = mapped_column(Integer)
     reps: Mapped[int] = mapped_column(Integer)
-    weight_kg: Mapped[Decimal] = mapped_column(DecimalText)
+    weight_g: Mapped[int] = mapped_column(Integer)
     subjective_rating: Mapped[str | None] = mapped_column(String(16))
     telegram_chat_id: Mapped[int] = mapped_column(BigInteger)
     telegram_message_id: Mapped[int | None] = mapped_column(BigInteger)

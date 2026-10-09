@@ -3,6 +3,7 @@
 import logging
 import secrets
 from datetime import timedelta
+from decimal import Decimal
 
 from sqlalchemy import delete, select, update
 
@@ -16,6 +17,10 @@ from app.parsers.result import parse_result
 from app.services.access import BotError, bound_athlete, require_chat
 
 logger = logging.getLogger(__name__)
+
+
+def format_weight_kg(weight_g: int) -> str:
+    return format(Decimal(weight_g) / 1000, "f")
 
 
 class Training:
@@ -59,7 +64,7 @@ class Training:
         result = s.scalar(query.where(Result.planned_set_number == number).limit(1))
         if result is None:
             result = s.scalar(query.limit(1))
-        return f"{result.reps}×{result.weight_kg} кг" if result else "нет истории"
+        return f"{result.reps}×{format_weight_kg(result.weight_g)} кг" if result else "нет истории"
 
     def _hint(self, s, training, exercise, athlete):
         plans, results, plan = self._plans_and_results(s, training, exercise, athlete)
@@ -171,11 +176,12 @@ class Training:
             plans, _, plan = self._plans_and_results(s, training, exercise, athlete)
             if plan is None:
                 raise BotError("Все плановые подходы выполнены или плана нет. Используйте /next или /choose.")
-            result = Result(training_session_id=training.id, program_exercise_id=exercise.id, athlete_id=athlete.id, planned_set_number=plan.set_number, reps=parsed.reps, weight_kg=parsed.weight, subjective_rating=parsed.rating, telegram_chat_id=chat_id, telegram_message_id=message_id)
+            weight_g = int(parsed.weight * 1000)
+            result = Result(training_session_id=training.id, program_exercise_id=exercise.id, athlete_id=athlete.id, planned_set_number=plan.set_number, reps=parsed.reps, weight_g=weight_g, subjective_rating=parsed.rating, telegram_chat_id=chat_id, telegram_message_id=message_id)
             s.add(result)
             training.revision += 1
             s.flush()
-            reply = Reply(f"✓ {athlete.display_name}: {parsed.reps}×{parsed.weight} кг\n\n" + self._hint(s, training, exercise, athlete))
+            reply = Reply(f"✓ {athlete.display_name}: {parsed.reps}×{format_weight_kg(weight_g)} кг\n\n" + self._hint(s, training, exercise, athlete))
         logger.info("event=set_result_saved chat_id=%s session_id=%s athlete_id=%s message_id=%s", chat_id, training.id, athlete.id, message_id)
         return reply
 
@@ -259,7 +265,7 @@ class Training:
                 logger.info("event=set_result_undone chat_id=%s session_id=%s athlete_id=%s result_id=%s", chat_id, training.id, athlete.id, result.id)
                 exercise = s.get(Exercise, result.program_exercise_id)
                 reply = self._card(s, training)
-                reply.text = f"Отменён ваш подход {result.planned_set_number}: {exercise.exercise_name}, {result.reps}×{result.weight_kg} кг.\n\n" + reply.text
+                reply.text = f"Отменён ваш подход {result.planned_set_number}: {exercise.exercise_name}, {result.reps}×{format_weight_kg(result.weight_g)} кг.\n\n" + reply.text
                 return reply
             if command == "/finish_train":
                 button = self._session_button(s, training, user_id, "Завершить тренировку", "finish")

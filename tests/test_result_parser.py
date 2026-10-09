@@ -9,6 +9,7 @@ from app.services.access import BotError
 @pytest.mark.parametrize("text,reps,weight,rating", [
     ("8*50", 8, "50", None), ("10*32.5", 10, "32.5", None),
     ("10*32,5", 10, "32.5", None), ("8*50 легко", 8, "50", "easy"),
+    ("8*32.125", 8, "32.125", None), ("8*32,125", 8, "32.125", None),
     ("8×50 норм", 8, "50", "normal"), ("8х50 тяжело", 8, "50", "hard"),
 ])
 def test_parse(text, reps, weight, rating):
