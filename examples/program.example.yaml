@@ -1,0 +1,37 @@
+schema_version: 1
+program:
+  key: strength_2026_10
+  name: "Силовой блок 2026-10"
+  version: 1
+athletes:
+  - key: xrust
+    display_name: xRust
+  - key: tim
+    display_name: Tim
+days:
+  - key: tuesday
+    name: "Вторник"
+    exercises:
+      - key: bench_press
+        name: "Жим штанги лёжа"
+        order: 1
+        prescriptions:
+          xrust:
+            - {reps: "8", rir: 3}
+            - {reps: "6-8", rir: 3}
+            - {reps: "6-8", rir: 3}
+            - {reps: "6-8", rir: 3}
+          tim:
+            - {reps: "10", rir: 3}
+            - {reps: "8-10", rir: 3}
+            - {reps: "8-10", rir: 3}
+      - key: squat
+        name: "Приседания со штангой"
+        order: 2
+        prescriptions:
+          xrust:
+            - {reps: "8", rir: 2}
+            - {reps: "6-8", rir: 2}
+          tim:
+            - {reps: "10", rir: null}
+            - {reps: "8-10", rir: 3}

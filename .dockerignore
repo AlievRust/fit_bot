@@ -9,3 +9,7 @@ docs/
 openspec/
 .excluded/
 .codex/
+
+data
+backups
+*.egg-info

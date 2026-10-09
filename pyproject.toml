@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools==82.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gym-training-bot"
+version = "0.1.0"
+description = "Пошаговый Telegram-бот для силовых тренировок"
+requires-python = ">=3.13,<3.15"
+dependencies = [
+  "aiogram>=3.26,<4", "SQLAlchemy>=2.0.48,<2.1", "alembic>=1.18,<2",
+  "pydantic>=2.12,<3", "PyYAML>=6.0.3,<7",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=9,<10"]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
