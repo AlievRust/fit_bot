@@ -1,0 +1,282 @@
+schema_version: 1
+
+import:
+  key: legacy_telegram_2026_10_03_05
+  name: "Legacy Telegram — 03/05.10.2026"
+  version: 1
+  expected_active_program:
+    key: arnie_family_strength_2026_10
+    version: 2
+  require_no_existing_training_sessions: true
+  synthetic_chat_id: 0
+  zero_load_proxy_kg: 1
+  notes:
+    - "История восстановлена из Telegram-группы до начала использования Arnie."
+    - "planned_set_number намеренно не задаётся: legacy-подходы не считаются плановыми подходами текущей программы."
+    - "Исходные 0 кг и упражнения с собственным весом без доп. отягощения записываются как 1 кг из-за текущего DB constraint weight_g >= 1."
+    - "Для Farmer carry reps = дистанция в метрах, weight_kg = вес ОДНОЙ гантели."
+
+sessions:
+  - key: legacy_2026_10_03
+    name: "03.10.2026 — субботняя разведочная тренировка"
+    date: "2026-10-03"
+    started_at: "15:57"
+    finished_at: "17:21"
+    started_by: xrust
+    participants: [xrust, tim]
+    exercises:
+      - key: incline_db_press
+        name: "Жим гантелей на наклонной скамье"
+        order: 1
+        note: "Вес — одна гантель."
+        results:
+          xrust:
+            - {reps: 12, weight_kg: 8,  at: "15:57"}
+            - {reps: 12, weight_kg: 10, at: "15:59"}
+            - {reps: 12, weight_kg: 12, at: "16:01"}
+            - {reps: 12, weight_kg: 16, at: "16:02"}
+
+      - key: flat_db_press
+        name: "Жим гантелей лёжа"
+        order: 2
+        note: "Вес — одна гантель. Отдельный exercise_key: не смешивать с наклонным жимом."
+        results:
+          tim:
+            - {reps: 12, weight_kg: 6,  at: "15:58"}
+            - {reps: 12, weight_kg: 8,  at: "15:59"}
+            - {reps: 12, weight_kg: 10, at: "16:00"}
+            - {reps: 12, weight_kg: 10, at: "16:02"}
+
+      - key: chest_supported_row
+        name: "Тяга с упором лёжа"
+        order: 3
+        note: "Тренажёр с одним штырём для блинов; weight_kg — общая масса блинов. Исходные 0 кг импортируются как технический proxy 1 кг."
+        results:
+          xrust:
+            - {reps: 12, weight_kg: 1,  at: "16:05", legacy_zero_load: true}
+            - {reps: 10, weight_kg: 25, at: "16:08"}
+            - {reps: 10, weight_kg: 30, at: "16:08"}
+            - {reps: 10, weight_kg: 30, at: "16:12"}
+          tim:
+            - {reps: 12, weight_kg: 1,  at: "16:06", legacy_zero_load: true}
+            - {reps: 12, weight_kg: 15, at: "16:06"}
+            - {reps: 12, weight_kg: 20, at: "16:08"}
+            - {reps: 12, weight_kg: 20, at: "16:11"}
+
+      - key: lat_pulldown
+        name: "Тяга верхнего блока к груди"
+        order: 4
+        results:
+          xrust:
+            - {reps: 12, weight_kg: 45, at: "16:18"}
+            - {reps: 12, weight_kg: 50, at: "16:20"}
+            - {reps: 12, weight_kg: 55, at: "16:22"}
+            - {reps: 12, weight_kg: 55, at: "16:24"}
+
+      - key: pullup
+        name: "Подтягивания — собственный вес"
+        order: 5
+        note: "Без дополнительного отягощения; 1 кг — технический proxy текущей схемы БД."
+        results:
+          tim:
+            - {reps: 10, weight_kg: 1, at: "16:18", bodyweight_unweighted: true}
+            - {reps: 10, weight_kg: 1, at: "16:18", bodyweight_unweighted: true}
+            - {reps: 10, weight_kg: 1, at: "16:19", bodyweight_unweighted: true}
+
+      - key: leg_press
+        name: "Жим ногами"
+        order: 6
+        results:
+          xrust:
+            - {reps: 12, weight_kg: 25, at: "16:29"}
+            - {reps: 11, weight_kg: 35, at: "16:32"}
+            - {reps: 10, weight_kg: 45, at: "16:34"}
+          tim:
+            - {reps: 12, weight_kg: 25, at: "16:28"}
+            - {reps: 12, weight_kg: 30, at: "16:31"}
+            - {reps: 12, weight_kg: 30, at: "16:33"}
+
+      - key: leg_curl
+        name: "Сгибание ног лёжа"
+        order: 7
+        results:
+          xrust:
+            - {reps: 12, weight_kg: 45, at: "16:37"}
+            - {reps: 12, weight_kg: 50, at: "16:40"}
+            - {reps: 12, weight_kg: 50, at: "16:44"}
+          tim:
+            - {reps: 12, weight_kg: 25, at: "16:38"}
+            - {reps: 12, weight_kg: 30, at: "16:41"}
+            - {reps: 12, weight_kg: 30, at: "16:45"}
+
+      - key: lateral_raise
+        name: "Разведения гантелей в стороны"
+        order: 8
+        note: "Вес — одна гантель."
+        results:
+          xrust:
+            - {reps: 12, weight_kg: 6, at: "16:52"}
+            - {reps: 12, weight_kg: 8, at: "16:54"}
+          tim:
+            - {reps: 12, weight_kg: 4, at: "16:59"}
+            - {reps: 12, weight_kg: 4, at: "16:59"}
+            - {reps: 12, weight_kg: 4, at: "16:59"}
+
+      - key: barbell_biceps_curl
+        name: "Сгибание штанги на бицепс"
+        order: 9
+        note: "Полный вес штанги: гриф + блины. Отдельный key от общего biceps_curl."
+        results:
+          xrust:
+            - {reps: 12, weight_kg: 20, at: "16:58"}
+            - {reps: 12, weight_kg: 25, at: "17:03"}
+          tim:
+            - {reps: 12, weight_kg: 15, at: "16:59"}
+            - {reps: 12, weight_kg: 15, at: "17:01"}
+
+      - key: close_grip_bench_press
+        name: "Жим штанги узким хватом"
+        order: 10
+        note: "Полный вес штанги: гриф + блины."
+        results:
+          xrust:
+            - {reps: 12, weight_kg: 20, at: "17:03"}
+            - {reps: 12, weight_kg: 30, at: "17:06"}
+            - {reps: 12, weight_kg: 40, at: "17:09"}
+            - {reps: 12, weight_kg: 50, at: "17:15"}
+          tim:
+            - {reps: 12, weight_kg: 20, at: "17:03"}
+            - {reps: 12, weight_kg: 30, at: "17:06"}
+            - {reps: 12, weight_kg: 30, at: "17:12"}
+            - {reps: 12, weight_kg: 40, at: "17:16"}
+
+      - key: cable_woodchop
+        name: "Дровосек на блоке — на сторону"
+        order: 11
+        note: "reps означает число повторов В КАЖДУЮ сторону."
+        results:
+          xrust:
+            - {reps: 10, weight_kg: 35, at: "17:20"}
+            - {reps: 10, weight_kg: 40, at: "17:21"}
+          tim:
+            - {reps: 10, weight_kg: 15, at: "17:21"}
+            - {reps: 10, weight_kg: 15, at: "17:21"}
+
+  - key: legacy_2026_10_05
+    name: "05.10.2026 — понедельник, разведка техники и весов"
+    date: "2026-10-05"
+    started_at: "18:21"
+    finished_at: "19:45"
+    started_by: xrust
+    participants: [xrust, tim]
+    exercises:
+      - key: deadlift
+        name: "Классическая становая тяга"
+        order: 1
+        note: "Полный вес штанги: гриф + блины."
+        results:
+          xrust:
+            - {reps: 8, weight_kg: 50, at: "18:21"}
+            - {reps: 6, weight_kg: 70, at: "18:25"}
+            - {reps: 8, weight_kg: 80, at: "18:29"}
+            - {reps: 6, weight_kg: 85, at: "18:34"}
+
+      - key: romanian_deadlift
+        name: "Румынская тяга"
+        order: 2
+        note: "Полный вес штанги: гриф + блины. Не смешивать с классической тягой."
+        results:
+          tim:
+            - {reps: 12, weight_kg: 30, at: "18:31"}
+            - {reps: 8,  weight_kg: 40, at: "18:31"}
+            - {reps: 8,  weight_kg: 50, at: "18:32"}
+            - {reps: 8,  weight_kg: 55, at: "18:32"}
+            - {reps: 8,  weight_kg: 55, at: "18:37"}
+
+      - key: squat
+        name: "Приседания со штангой"
+        order: 3
+        note: "Полный вес штанги: гриф + блины."
+        results:
+          xrust:
+            - {reps: 10, weight_kg: 40, at: "18:40"}
+            - {reps: 10, weight_kg: 50, at: "18:43"}
+            - {reps: 8,  weight_kg: 60, at: "18:52"}
+          tim:
+            - {reps: 8, weight_kg: 40, at: "18:42"}
+            - {reps: 8, weight_kg: 40, at: "18:45"}
+            - {reps: 8, weight_kg: 50, at: "18:51"}
+
+      - key: incline_db_press
+        name: "Жим гантелей на наклонной скамье"
+        order: 4
+        note: "Вес — одна гантель."
+        results:
+          xrust:
+            - {reps: 12, weight_kg: 12, at: "18:59"}
+            - {reps: 12, weight_kg: 14, at: "19:00"}
+            - {reps: 12, weight_kg: 16, at: "19:00"}
+            - {reps: 12, weight_kg: 20, at: "19:03"}
+          tim:
+            - {reps: 12, weight_kg: 6,  at: "18:54"}
+            - {reps: 12, weight_kg: 8,  at: "18:59"}
+            - {reps: 12, weight_kg: 12, at: "18:59"}
+            - {reps: 12, weight_kg: 12, at: "19:01"}
+
+      - key: lat_pulldown
+        name: "Тяга верхнего блока к груди"
+        order: 5
+        results:
+          xrust:
+            - {reps: 12, weight_kg: 50, at: "19:05"}
+            - {reps: 12, weight_kg: 55, at: "19:09"}
+            - {reps: 12, weight_kg: 60, at: "19:13"}
+          tim:
+            - {reps: 12, weight_kg: 35, at: "19:07"}
+            - {reps: 12, weight_kg: 35, at: "19:08"}
+            - {reps: 12, weight_kg: 35, at: "19:11"}
+
+      - key: leg_curl
+        name: "Сгибание ног лёжа"
+        order: 6
+        results:
+          xrust:
+            - {reps: 12, weight_kg: 55, at: "19:22"}
+            - {reps: 10, weight_kg: 60, at: "19:22"}
+            - {reps: 8,  weight_kg: 60, at: "19:23"}
+          tim:
+            - {reps: 12, weight_kg: 30, at: "19:15"}
+            - {reps: 12, weight_kg: 30, at: "19:22"}
+            - {reps: 12, weight_kg: 30, at: "19:22"}
+
+      - key: standing_calf_raise
+        name: "Подъёмы на носки с прямым коленом"
+        order: 7
+        note: "Тим: запись 10×10 кг ×3 развёрнута в 3 подхода. xRust: в Telegram есть две отдельные записи 10×16 кг; вес — одна гантель, работа на каждую ногу."
+        results:
+          xrust:
+            - {reps: 10, weight_kg: 16, at: "19:45"}
+            - {reps: 10, weight_kg: 16, at: "19:45"}
+          tim:
+            - {reps: 10, weight_kg: 10, at: "19:32", expanded_from_aggregate: true}
+            - {reps: 10, weight_kg: 10, at: "19:32", expanded_from_aggregate: true}
+            - {reps: 10, weight_kg: 10, at: "19:32", expanded_from_aggregate: true}
+
+      - key: seated_calf_raise
+        name: "Подъёмы на носки сидя"
+        order: 8
+        note: "В Telegram записано как «Калфекал сидя»; нормализовано по уточнению пользователя. 3 подхода развёрнуты отдельно."
+        results:
+          tim:
+            - {reps: 10, weight_kg: 20, at: "19:39", expanded_from_aggregate: true}
+            - {reps: 10, weight_kg: 20, at: "19:39", expanded_from_aggregate: true}
+            - {reps: 10, weight_kg: 20, at: "19:39", expanded_from_aggregate: true}
+
+      - key: farmer_carry
+        name: "Farmer carry — reps=метры, вес=1 гантель"
+        order: 9
+        note: "2 подхода по 30 м с двумя гантелями по 20 кг. По контракту текущей программы в weight_kg хранится вес ОДНОЙ гантели."
+        results:
+          tim:
+            - {reps: 30, weight_kg: 20, at: "19:45", reps_are_meters: true, reconstructed_count: true}
+            - {reps: 30, weight_kg: 20, at: "19:45", reps_are_meters: true, reconstructed_count: true}
