@@ -181,6 +181,8 @@ class Result(Base):
     training_session_id: Mapped[int] = mapped_column(ForeignKey("training_sessions.id"))
     program_exercise_id: Mapped[int] = mapped_column(ForeignKey("program_exercises.id"))
     athlete_id: Mapped[int] = mapped_column(ForeignKey("athletes.id"))
+    # NULL обозначает дополнительный рабочий подход после выполнения плана.
+    # Несколько NULL разрешены уникальным индексом; плановые номера уникальны.
     planned_set_number: Mapped[int | None] = mapped_column(Integer)
     reps: Mapped[int] = mapped_column(Integer)
     # Целые граммы дают точные сравнения и агрегаты в SQL: 32.125 кг → 32125.

@@ -61,12 +61,14 @@ def test_access_and_duplicate(db, training):
         assert s.scalar(select(func.count()).select_from(Result)) == 1
 
 
-def test_extra_sets_rejected(training):
+def test_extra_set_after_four_planned_sets(db, training):
     for i in range(4):
         training.save_result(-100, 2, i + 1, "8*50")
-    with pytest.raises(BotError):
-        training.save_result(-100, 2, 5, "8*50")
-    assert "упражнение выполнено 4/4" in training.status(-100, 2).text
+    reply = training.save_result(-100, 2, 5, "8*50")
+    assert "xRust: дополнительный подход" in reply.text
+    assert "план выполнен 4/4" in training.status(-100, 2).text
+    with db.transaction() as s:
+        assert s.scalars(select(Result.planned_set_number).order_by(Result.id)).all() == [1, 2, 3, 4, None]
 
 
 def test_no_session_and_no_second_session(db, training):

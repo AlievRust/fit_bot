@@ -72,7 +72,8 @@ class Training:
 
         Следующий подход определяется отдельно для спортсмена. Поиск первого
         отсутствующего номера, а не len(results)+1, позволяет заполнить пробел
-        после /undo. Если плана нет или он выполнен, третий элемент равен None.
+        после /undo. Дополнительные результаты имеют номер None и не закрывают
+        плановый подход. Если плана нет или он выполнен, третий элемент равен None.
         """
         plans = s.scalars(select(Prescription).where(Prescription.program_exercise_id == exercise.id, Prescription.athlete_id == athlete.id).order_by(Prescription.set_number)).all()
         results = s.scalars(select(Result).where(Result.training_session_id == training.id, Result.program_exercise_id == exercise.id, Result.athlete_id == athlete.id, Result.deleted_at.is_(None))).all()
@@ -101,7 +102,8 @@ class Training:
         if not plans:
             return f"{athlete.display_name} — нет плана этого упражнения"
         if plan is None:
-            return f"✓ {athlete.display_name}: упражнение выполнено {len(results)}/{len(plans)}\nДалее: /next или /choose."
+            completed = sum(result.planned_set_number is not None for result in results)
+            return f"✓ {athlete.display_name}: план выполнен {completed}/{len(plans)}\n\nМожно:\n• отправить ещё результат — запишу как дополнительный подход\n• /next — перейти дальше или /choose — выбрать упражнение."
         reps = str(plan.reps_min) if plan.reps_min == plan.reps_max else f"{plan.reps_min}–{plan.reps_max}"
         rir = str(plan.target_rir) if plan.target_rir is not None else "не задан"
         return f"{athlete.display_name} — подход {plan.set_number}/{len(plans)}\nПлан: {reps} повторов · RIR {rir}\nПрошлый раз: {self._history(s, training, exercise, athlete, plan.set_number)}"
@@ -208,7 +210,7 @@ class Training:
             return self._navigation_callback(s, chat_id, user_id, action)
 
     def save_result(self, chat_id, user_id, message_id, text):
-        """Записать результат автора в его первый незаполненный плановый подход.
+        """Записать плановый подход автора либо дополнительный после выполнения плана.
 
         Повторное сообщение не создаёт запись даже после /undo. Проверки,
         выбор номера, запись и повышение revision выполняются атомарно;
@@ -228,17 +230,21 @@ class Training:
             if s.get(SkippedExercise, (training.id, exercise.id)):
                 raise BotError("Упражнение пропущено. Используйте /choose для возврата или /finish_train.")
             plans, _, plan = self._plans_and_results(s, training, exercise, athlete)
-            if plan is None:
-                raise BotError("Все плановые подходы выполнены или плана нет. Используйте /next или /choose.")
+            if not plans:
+                raise BotError("Плана этого упражнения нет. Используйте /next или /choose.")
+            # NULL отличает дополнительный подход. Если /undo освободил плановый
+            # номер, сначала заполняем его, даже когда extra уже есть в истории.
+            planned_set_number = plan.set_number if plan is not None else None
             # Парсер допускает максимум три знака после точки, поэтому перевод
             # в граммы точен: int здесь не отбрасывает допустимую дробную часть.
             weight_g = int(parsed.weight * 1000)
-            result = Result(training_session_id=training.id, program_exercise_id=exercise.id, athlete_id=athlete.id, planned_set_number=plan.set_number, reps=parsed.reps, weight_g=weight_g, subjective_rating=parsed.rating, telegram_chat_id=chat_id, telegram_message_id=message_id)
+            result = Result(training_session_id=training.id, program_exercise_id=exercise.id, athlete_id=athlete.id, planned_set_number=planned_set_number, reps=parsed.reps, weight_g=weight_g, subjective_rating=parsed.rating, telegram_chat_id=chat_id, telegram_message_id=message_id)
             s.add(result)
             # Запись подхода делает прежние подтверждения навигации неактуальными.
             training.revision += 1
             s.flush()
-            reply = Reply(f"✓ {athlete.display_name}: {parsed.reps}×{format_weight_kg(weight_g)} кг\n\n" + self._hint(s, training, exercise, athlete))
+            label = "дополнительный подход — " if planned_set_number is None else ""
+            reply = Reply(f"✓ {athlete.display_name}: {label}{parsed.reps}×{format_weight_kg(weight_g)} кг\n\n" + self._hint(s, training, exercise, athlete))
         logger.info("event=set_result_saved chat_id=%s session_id=%s athlete_id=%s message_id=%s", chat_id, training.id, athlete.id, message_id)
         return reply
 
@@ -340,14 +346,16 @@ class Training:
                 if result is None:
                     raise BotError("У вас нет результатов для отмены в этой тренировке.")
                 result.deleted_at = utcnow()
-                # Мягкая отмена сохраняет message_id и освобождает плановый номер.
+                # Мягкая отмена сохраняет message_id; для планового результата
+                # она также освобождает его номер. Extra не меняет плановый счётчик.
                 # Указатель не меняется; отменяемый подход может быть из прошлого упражнения.
                 training.revision += 1
                 s.flush()
                 logger.info("event=set_result_undone chat_id=%s session_id=%s athlete_id=%s result_id=%s", chat_id, training.id, athlete.id, result.id)
                 exercise = s.get(Exercise, result.program_exercise_id)
                 reply = self._card(s, training)
-                reply.text = f"Отменён ваш подход {result.planned_set_number}: {exercise.exercise_name}, {result.reps}×{format_weight_kg(result.weight_g)} кг.\n\n" + reply.text
+                label = "дополнительный подход" if result.planned_set_number is None else f"подход {result.planned_set_number}"
+                reply.text = f"Отменён ваш {label}: {exercise.exercise_name}, {result.reps}×{format_weight_kg(result.weight_g)} кг.\n\n" + reply.text
                 return reply
             if command == "/finish_train":
                 button = self._session_button(s, training, user_id, "Завершить тренировку", "finish")
