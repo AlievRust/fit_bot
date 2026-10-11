@@ -12,16 +12,29 @@ RATINGS = {"легко": "easy", "норм": "normal", "тяжело": "hard"}
 
 @dataclass(frozen=True)
 class ParsedResult:
+    """Разобранный ввод: повторы, точный вес в килограммах и код оценки.
+
+    frozen=True запрещает менять поля после проверки. Перевод в граммы
+    выполняет сервис при сохранении результата.
+    """
+
     reps: int
     weight: Decimal
     rating: str | None
 
 
 def parse_result(text: str) -> ParsedResult:
+    """Разобрать всё сообщение вида «10*32,125 тяжело» или вызвать BotError.
+
+    Допустимы 1–1000 повторов и 0 < вес <= 2000 кг с точностью до грамма.
+    Возвращается Decimal, чтобы десятичный ввод не проходил через float.
+    """
+    # fullmatch не позволяет случайно записать число из обычного предложения.
     match = PATTERN.fullmatch(text)
     if not match:
         raise BotError("Результат: повторы*вес, например 8*50 или 10*32,5 тяжело.")
     reps = int(match[1])
+    # Decimal создаётся из строки: 32.125 сохраняется без двоичного округления.
     weight = Decimal(match[2].replace(",", "."))
     if reps > 1000 or not 0 < weight <= 2000:
         raise BotError("Допустимо 1–1000 повторов и вес больше 0, до 2000 кг.")

@@ -10,14 +10,17 @@ from app.logging_setup import protect_logs
 
 
 def main() -> None:
+    """Прочитать настройки, защитить логи и запустить асинхронный цикл бота."""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     try:
         config = Config.from_env()
     except ValidationError:
+        # Полный отчёт Pydantic может содержать входные значения, включая секреты.
         raise SystemExit("Проверьте BOT_TOKEN, OWNER_TELEGRAM_ID и DATABASE_PATH.") from None
     from app.bot import run
 
     protect_logs(config.bot_token.get_secret_value())
+    # asyncio.run создаёт цикл событий и закрывает его после завершения run.
     asyncio.run(run(config))
 
 

@@ -11,6 +11,11 @@ depends_on = None
 
 
 def upgrade():
+    """Создать таблицы, ограничения и индексы первой версии схемы.
+
+    Миграция не импортирует текущие модели: её схема зафиксирована навсегда.
+    Вес здесь ещё хранится текстом; миграция 0002 переводит его в целые граммы.
+    """
     # Зафиксированная начальная схема.
     op.create_table('app_settings',
     sa.Column('id', sa.Integer(), nullable=False),
@@ -173,6 +178,7 @@ def upgrade():
 
 
 def downgrade():
+    """Удалить начальную схему вместе с данными в обратном порядке зависимостей."""
     # Зафиксированная начальная схема.
     op.drop_table('skipped_exercises')
     with op.batch_alter_table('set_results', schema=None) as batch_op:

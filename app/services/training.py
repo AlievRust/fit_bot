@@ -20,36 +20,60 @@ logger = logging.getLogger(__name__)
 
 
 def format_weight_kg(weight_g: int) -> str:
+    """Показать целые граммы в килограммах без float и научной записи."""
     return format(Decimal(weight_g) / 1000, "f")
 
 
 class Training:
+    """Вести общую тренировку с отдельным прогрессом каждого спортсмена.
+
+    Публичные методы открывают транзакции и возвращают Reply без сетевого I/O.
+    Внутренние методы используют уже открытую ORM-сессию s. Все данные,
+    включая кнопки, находятся в БД и доступны после перезапуска процесса.
+    """
+
     def __init__(self, db):
+        """Получить БД, не создавая отдельного состояния тренировки в памяти."""
         self.db = db
 
     def _active(self, s, chat_id):
+        """Найти единственную активную сессию чата или подсказать способ запуска."""
         training = s.scalar(select(TrainingSession).where(TrainingSession.chat_id == chat_id, TrainingSession.status == "active"))
         if training is None:
             raise BotError("Нет активной тренировки. Используйте /start_train.")
         return training
 
     def _exercise(self, s, training):
+        """Найти текущее упражнение по дню и общему порядковому указателю сессии."""
         return s.scalar(select(Exercise).where(Exercise.program_day_id == training.program_day_id, Exercise.order == training.current_exercise_order))
 
     def _eligible(self, s, day_id):
+        """Вернуть активных привязанных спортсменов с хотя бы одним планом дня."""
         return s.scalars(select(Athlete).join(Binding).join(Prescription, Prescription.athlete_id == Athlete.id).join(Exercise, Exercise.id == Prescription.program_exercise_id).where(Exercise.program_day_id == day_id, Athlete.active.is_(True)).distinct().order_by(Athlete.id)).all()
 
     def _button(self, s, chat_id, user_id, label, kind, payload):
+        """Сохранить действие на 20 минут и вернуть подпись с непрозрачным токеном.
+
+        Параметры и права проверяются на сервере. Случайный токен не содержит
+        идентификаторы спортсменов и не заменяет проверку автора при нажатии.
+        """
         s.execute(delete(Action).where(Action.expires_at < utcnow()))
         token = secrets.token_hex(16)
         s.add(Action(token=token, chat_id=chat_id, user_id=user_id, kind=kind, payload=payload, expires_at=utcnow() + timedelta(minutes=20)))
         return label, "a:" + token
 
     def _invalidate_selection(self, s, chat_id, user_id):
+        """Погасить предыдущие меню выбора дня и участников этого пользователя."""
         # Новое меню заменяет все старые ветки выбора того же автора.
         s.execute(update(Action).where(Action.chat_id == chat_id, Action.user_id == user_id, Action.kind.in_(["day", "toggle", "begin"]), Action.used.is_(False)).values(used=True))
 
     def _plans_and_results(self, s, training, exercise, athlete):
+        """Вернуть (планы, действующие результаты, первый незаполненный план).
+
+        Следующий подход определяется отдельно для спортсмена. Поиск первого
+        отсутствующего номера, а не len(results)+1, позволяет заполнить пробел
+        после /undo. Если плана нет или он выполнен, третий элемент равен None.
+        """
         plans = s.scalars(select(Prescription).where(Prescription.program_exercise_id == exercise.id, Prescription.athlete_id == athlete.id).order_by(Prescription.set_number)).all()
         results = s.scalars(select(Result).where(Result.training_session_id == training.id, Result.program_exercise_id == exercise.id, Result.athlete_id == athlete.id, Result.deleted_at.is_(None))).all()
         numbers = {r.planned_set_number for r in results}
@@ -57,6 +81,11 @@ class Training:
         return plans, results, next_plan
 
     def _history(self, s, training, exercise, athlete, number):
+        """Найти подсказку из более ранних сессий по стабильному ключу упражнения.
+
+        Сначала ищется тот же номер подхода; если его нет, берётся последний
+        действующий результат упражнения. Текущая сессия в историю не входит.
+        """
         query = select(Result).join(TrainingSession, Result.training_session_id == TrainingSession.id).join(Exercise, Result.program_exercise_id == Exercise.id).where(
             Result.athlete_id == athlete.id, Exercise.exercise_key == exercise.exercise_key,
             TrainingSession.id < training.id, Result.deleted_at.is_(None),
@@ -67,6 +96,7 @@ class Training:
         return f"{result.reps}×{format_weight_kg(result.weight_g)} кг" if result else "нет истории"
 
     def _hint(self, s, training, exercise, athlete):
+        """Сформировать индивидуальный план следующего подхода и прошлый результат."""
         plans, results, plan = self._plans_and_results(s, training, exercise, athlete)
         if not plans:
             return f"{athlete.display_name} — нет плана этого упражнения"
@@ -77,6 +107,7 @@ class Training:
         return f"{athlete.display_name} — подход {plan.set_number}/{len(plans)}\nПлан: {reps} повторов · RIR {rir}\nПрошлый раз: {self._history(s, training, exercise, athlete, plan.set_number)}"
 
     def _card(self, s, training):
+        """Собрать общую карточку упражнения с подсказками всех участников."""
         program = s.get(Program, training.program_id)
         day = s.get(Day, training.program_day_id)
         exercise = self._exercise(s, training)
@@ -89,6 +120,10 @@ class Training:
         return Reply(f"{program.name} · {day.name}\n🏋️ {exercise.exercise_name}\nУпражнение {index}/{len(exercises)}\n\n{hints}\n\nРезультат: повторы*вес, например 8*50\n/next · /choose · /skip · /undo · /finish_train")
 
     def start_choices(self, chat_id, user_id):
+        """Вернуть существующую тренировку либо меню дней активной программы.
+
+        Сессия создаётся только после выбора участников и нажатия кнопки старта.
+        """
         with self.db.transaction() as s:
             require_chat(s, chat_id)
             bound_athlete(s, user_id)
@@ -106,6 +141,7 @@ class Training:
             return Reply("Выберите день тренировки:", buttons)
 
     def _participant_choices(self, s, chat_id, user_id, payload):
+        """Построить новое меню участников, учитывая действующие привязки и планы."""
         self._invalidate_selection(s, chat_id, user_id)
         eligible = self._eligible(s, payload["day_id"])
         if not eligible:
@@ -114,6 +150,7 @@ class Training:
         payload = {**payload, "selected": sorted(selected)}
         buttons = []
         for athlete in eligible:
+            # Симметрическая разность переключает выбор одного спортсмена.
             new_selected = selected ^ {athlete.id}
             buttons.append([self._button(s, chat_id, user_id, ("✓ " if athlete.id in selected else "") + athlete.display_name, "toggle", {**payload, "selected": sorted(new_selected)})])
         if selected:
@@ -121,6 +158,11 @@ class Training:
         return Reply("Выберите участников, затем нажмите «Начать тренировку»:", buttons)
 
     def _start(self, s, chat_id, user_id, payload):
+        """Повторно проверить выбор и сохранить сессию вместе с участниками.
+
+        Пока меню было открыто, программа или привязки могли измениться.
+        Поэтому payload не считается достаточным доказательством их актуальности.
+        """
         author = bound_athlete(s, user_id)
         program = s.get(Program, payload["program_id"])
         day = s.get(Day, payload["day_id"])
@@ -142,6 +184,11 @@ class Training:
         return self._card(s, training)
 
     def callback(self, chat_id, user_id, token):
+        """Проверить серверную кнопку и выполнить действие в одной транзакции.
+
+        Проверяются автор, чат, срок и признак used; для навигации — ещё версия
+        сессии. При исключении откатывается и действие, и изменение used.
+        """
         with self.db.transaction() as s:
             require_chat(s, chat_id)
             bound_athlete(s, user_id)
@@ -161,10 +208,17 @@ class Training:
             return self._navigation_callback(s, chat_id, user_id, action)
 
     def save_result(self, chat_id, user_id, message_id, text):
+        """Записать результат автора в его первый незаполненный плановый подход.
+
+        Повторное сообщение не создаёт запись даже после /undo. Проверки,
+        выбор номера, запись и повышение revision выполняются атомарно;
+        подтверждение возвращается только после фиксации транзакции.
+        """
         parsed = parse_result(text)
         with self.db.transaction() as s:
             require_chat(s, chat_id)
             athlete = bound_athlete(s, user_id)
+            # В поиск входят мягко отменённые записи: старый update нельзя оживить.
             if s.scalar(select(Result.id).where(Result.telegram_chat_id == chat_id, Result.telegram_message_id == message_id)):
                 return Reply("Это сообщение уже обработано. Используйте /status.")
             training = self._active(s, chat_id)
@@ -176,9 +230,12 @@ class Training:
             plans, _, plan = self._plans_and_results(s, training, exercise, athlete)
             if plan is None:
                 raise BotError("Все плановые подходы выполнены или плана нет. Используйте /next или /choose.")
+            # Парсер допускает максимум три знака после точки, поэтому перевод
+            # в граммы точен: int здесь не отбрасывает допустимую дробную часть.
             weight_g = int(parsed.weight * 1000)
             result = Result(training_session_id=training.id, program_exercise_id=exercise.id, athlete_id=athlete.id, planned_set_number=plan.set_number, reps=parsed.reps, weight_g=weight_g, subjective_rating=parsed.rating, telegram_chat_id=chat_id, telegram_message_id=message_id)
             s.add(result)
+            # Запись подхода делает прежние подтверждения навигации неактуальными.
             training.revision += 1
             s.flush()
             reply = Reply(f"✓ {athlete.display_name}: {parsed.reps}×{format_weight_kg(weight_g)} кг\n\n" + self._hint(s, training, exercise, athlete))
@@ -186,27 +243,41 @@ class Training:
         return reply
 
     def status(self, chat_id, user_id):
+        """Показать сохранённое состояние любому привязанному спортсмену группы."""
         with self.db.transaction() as s:
             require_chat(s, chat_id)
             bound_athlete(s, user_id)
             return self._card(s, self._active(s, chat_id))
 
     def _require_participant(self, s, training, user_id):
+        """Проверить участие автора в сессии перед её изменением."""
         athlete = bound_athlete(s, user_id)
         if s.get(Participant, (training.id, athlete.id)) is None:
             raise BotError("Управление тренировкой доступно её участникам.")
         return athlete
 
     def _session_button(self, s, training, user_id, label, kind, **extra):
+        """Связать подтверждение с конкретной сессией и её текущей revision."""
         payload = {"session_id": training.id, "revision": training.revision, **extra}
         return self._button(s, training.chat_id, user_id, label, kind, payload)
 
     def _incomplete(self, s, training):
+        """Вернуть имена всех участников с незаполненным подходом упражнения.
+
+        Проверяется вся группа, а не только автор /next. Отсутствие плана
+        у спортсмена не считается незавершённым подходом.
+        """
         exercise = self._exercise(s, training)
         athletes = s.scalars(select(Athlete).join(Participant).where(Participant.session_id == training.id)).all()
         return [a.display_name for a in athletes if self._plans_and_results(s, training, exercise, a)[2] is not None]
 
     def _move(self, s, training, user_id, target=None):
+        """Переключить общее упражнение на следующее либо явно выбранное.
+
+        Результаты и индивидуальный прогресс сохраняются. Явный выбор снимает
+        отметку пропуска; конец списка предлагает /finish_train без автозавершения.
+        Проверки прав и подтверждения выполняет вызывающий метод.
+        """
         if target is None:
             exercise = s.scalar(select(Exercise).where(Exercise.program_day_id == training.program_day_id, Exercise.order > training.current_exercise_order).order_by(Exercise.order).limit(1))
         else:
@@ -224,6 +295,12 @@ class Training:
         return self._card(s, training)
 
     def command(self, chat_id, user_id, message_id, command):
+        """Выполнить команду участника, защитив её журналом ProcessedMessage.
+
+        /next при незавершённых подходах создаёт подтверждение; /choose — меню;
+        /skip помечает общее упражнение; /undo отменяет только результат автора;
+        /finish_train требует отдельного нажатия кнопки.
+        """
         with self.db.transaction() as s:
             require_chat(s, chat_id)
             training = self._active(s, chat_id)
@@ -231,9 +308,12 @@ class Training:
             if s.get(ProcessedMessage, (chat_id, message_id)):
                 return Reply("Это сообщение уже обработано. Используйте /status.")
             s.add(ProcessedMessage(chat_id=chat_id, message_id=message_id))
+            # Журнал и изменения фиксируются вместе; ошибка откатывает оба.
             if command == "/next":
                 incomplete = self._incomplete(s, training)
                 if incomplete:
+                    # Даже закончивший свой план участник подтверждает переход,
+                    # если у кого-то ещё остались подходы. Прогресс не удаляется.
                     button = self._session_button(s, training, user_id, "Перейти, сохранив прогресс", "next")
                     return Reply("Не завершили упражнение: " + ", ".join(incomplete) + ".\nПодтвердите переход:", [[button]])
                 return self._move(s, training, user_id)
@@ -260,6 +340,8 @@ class Training:
                 if result is None:
                     raise BotError("У вас нет результатов для отмены в этой тренировке.")
                 result.deleted_at = utcnow()
+                # Мягкая отмена сохраняет message_id и освобождает плановый номер.
+                # Указатель не меняется; отменяемый подход может быть из прошлого упражнения.
                 training.revision += 1
                 s.flush()
                 logger.info("event=set_result_undone chat_id=%s session_id=%s athlete_id=%s result_id=%s", chat_id, training.id, athlete.id, result.id)
@@ -273,8 +355,11 @@ class Training:
             raise BotError("Неизвестная команда тренировки.")
 
     def _navigation_callback(self, s, chat_id, user_id, action):
+        """Выполнить подтверждение только для неизменившейся активной сессии."""
         training = self._active(s, chat_id)
         self._require_participant(s, training, user_id)
+        # Если другой участник записал подход после появления кнопки, revision
+        # уже другая: нужно снова вызвать команду и подтвердить свежий выбор.
         if training.id != action.payload.get("session_id") or training.revision != action.payload.get("revision"):
             raise BotError("Состояние тренировки изменилось. Повторите команду и подтвердите заново.")
         if action.kind == "next":

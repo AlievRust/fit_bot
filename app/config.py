@@ -7,6 +7,8 @@ from pydantic import BaseModel, Field, SecretStr, field_validator
 
 
 class Config(BaseModel):
+    """Проверенные настройки запуска; SecretStr скрывает токен при выводе модели."""
+
     bot_token: SecretStr
     owner_telegram_id: int = Field(gt=0, le=2**63 - 1)
     database_path: Path = Path("data/gymbot.sqlite3")
@@ -14,12 +16,18 @@ class Config(BaseModel):
     @field_validator("bot_token")
     @classmethod
     def token_present(cls, value: SecretStr) -> SecretStr:
+        """Отклонить пустой токен, сохранив его в оболочке SecretStr."""
         if not value.get_secret_value().strip():
             raise ValueError("BOT_TOKEN обязателен")
         return value
 
     @classmethod
     def from_env(cls) -> "Config":
+        """Прочитать env и передать преобразование типов и проверку Pydantic.
+
+        Файл .env здесь не загружается: переменные должен передать способ запуска,
+        например Docker Compose. Ошибочные значения вызывают ValidationError.
+        """
         return cls.model_validate(
             {
                 "bot_token": os.environ.get("BOT_TOKEN", ""),

@@ -12,6 +12,11 @@ depends_on = None
 
 
 def upgrade():
+    """Точно перевести текстовые килограммы в граммы и заменить колонку.
+
+    Все старые значения проверяются до изменения схемы. Некорректный вес
+    останавливает миграцию вместо округления или потери данных.
+    """
     connection = op.get_bind()
     converted = []
     for result_id, weight_kg in connection.execute(sa.text("SELECT id, weight_kg FROM set_results")):
@@ -29,12 +34,15 @@ def upgrade():
     if converted:
         connection.execute(sa.text("UPDATE set_results SET weight_g = :weight_g WHERE id = :result_id"), converted)
     with op.batch_alter_table("set_results") as batch:
+        # SQLite не поддерживает все варианты ALTER TABLE: Alembic создаёт
+        # новую таблицу, переносит данные и заменяет прежнюю в batch-режиме.
         batch.drop_column("weight_kg")
         batch.alter_column("weight_g", existing_type=sa.Integer(), nullable=False)
         batch.create_check_constraint("result_weight_g_valid", "typeof(weight_g) = 'integer' AND weight_g BETWEEN 1 AND 2000000")
 
 
 def downgrade():
+    """Вернуть текстовые килограммы, сохранив точность каждого результата."""
     connection = op.get_bind()
     converted = [
         {"result_id": result_id, "weight_kg": format(Decimal(weight_g) / 1000, "f")}

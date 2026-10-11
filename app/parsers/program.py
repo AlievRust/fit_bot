@@ -15,27 +15,36 @@ Name = Annotated[str, Field(min_length=1, max_length=100)]
 
 
 class StrictModel(BaseModel):
+    """База YAML-схемы: опечатки в полях и неявное преобразование типов запрещены."""
+
     model_config = ConfigDict(extra="forbid", strict=True)
 
 
 class ProgramInfo(StrictModel):
+    """Название и уникальная версия импортируемой программы."""
+
     key: Key
     name: Name
     version: Annotated[StrictInt, Field(ge=1, le=2**31 - 1)]
 
 
 class AthleteInfo(StrictModel):
+    """Стабильный ключ спортсмена и имя для отображения в группе."""
+
     key: Key
     display_name: Name
 
 
 class SetPlan(StrictModel):
+    """План одного подхода: строка повторов и необязательная цель RIR."""
+
     reps: str
     rir: Annotated[StrictInt, Field(ge=0, le=10)] | None = None
 
     @field_validator("reps")
     @classmethod
     def valid_reps(cls, value: str) -> str:
+        """Проверить точное число или диапазон повторов без изменения строки."""
         if not re.fullmatch(r"[1-9][0-9]{0,3}(?:-[1-9][0-9]{0,3})?", value):
             raise ValueError('Повторы задаются строкой "8" или "6-8"')
         low, high = reps_bounds(value)
@@ -45,11 +54,14 @@ class SetPlan(StrictModel):
 
 
 def reps_bounds(value: str) -> tuple[int, int]:
+    """Преобразовать проверенную строку: «8» → (8, 8), «6-8» → (6, 8)."""
     parts = value.split("-")
     return int(parts[0]), int(parts[-1])
 
 
 class ExerciseInfo(StrictModel):
+    """Упражнение и индивидуальные списки подходов по ключам спортсменов."""
+
     key: Key
     name: Name
     order: Annotated[StrictInt, Field(ge=1, le=1000)]
@@ -57,18 +69,23 @@ class ExerciseInfo(StrictModel):
 
 
 class DayInfo(StrictModel):
+    """День программы с уникальными ключами и порядком упражнений."""
+
     key: Key
     name: Name
     exercises: Annotated[list[ExerciseInfo], Field(min_length=1, max_length=30)]
 
     @model_validator(mode="after")
     def unique_exercises(self):
+        """Проверить уникальность после валидации каждого упражнения."""
         if len({e.key for e in self.exercises}) != len(self.exercises) or len({e.order for e in self.exercises}) != len(self.exercises):
             raise ValueError("Ключи и порядок упражнений дня должны быть уникальны")
         return self
 
 
 class ProgramDocument(StrictModel):
+    """Корень YAML-документа; проверяет также ссылки между его разделами."""
+
     schema_version: StrictInt
     program: ProgramInfo
     athletes: Annotated[list[AthleteInfo], Field(min_length=1, max_length=20)]
@@ -76,6 +93,7 @@ class ProgramDocument(StrictModel):
 
     @model_validator(mode="after")
     def validate_references(self):
+        """Отклонить неподдерживаемую схему, дубли и планы неизвестных спортсменов."""
         if self.schema_version != 1:
             raise ValueError("Поддерживается только schema_version: 1")
         keys = {a.key for a in self.athletes}
@@ -89,10 +107,16 @@ class ProgramDocument(StrictModel):
 
 
 class UniqueLoader(yaml.SafeLoader):
+    """Безопасный YAML-загрузчик с собственной проверкой повторных ключей."""
     pass
 
 
 def unique_mapping(loader, node, deep=False):
+    """Собрать YAML-словарь, отклонив повторный или неподходящий ключ.
+
+    Обычный словарь перезаписал бы предыдущее значение одинакового ключа,
+    поэтому дубли проверяются до завершения разбора документа.
+    """
     mapping = {}
     for key_node, value_node in node.value:
         key = loader.construct_object(key_node, deep=deep)
@@ -106,10 +130,16 @@ UniqueLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, uni
 
 
 def parse_program(data: bytes) -> ProgramDocument:
+    """Проверить размер, разобрать UTF-8 YAML и вернуть полностью проверенный план.
+
+    Функция не пишет в БД. Ошибки синтаксиса и схемы превращаются в BotError
+    с подсказкой о поле, без вывода исходного документа пользователю.
+    """
     if not data or len(data) > MAX_IMPORT_BYTES:
         raise BotError("YAML должен быть непустым и не больше 128 КиБ.")
     try:
         text = data.decode("utf-8-sig")
+        # Запрещаем ссылки YAML: вложенность и объём плана должны быть явными.
         if any(isinstance(token, (AliasToken, AnchorToken)) for token in yaml.scan(text)):
             raise ValueError("YAML aliases/anchors не поддерживаются")
         raw = yaml.load(text, Loader=UniqueLoader)

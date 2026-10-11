@@ -19,24 +19,39 @@ logger = logging.getLogger(__name__)
 
 
 class LimitedBuffer(BytesIO):
+    """Ограничивать фактически скачанные байты YAML, независимо от метаданных."""
+
     def write(self, data):
+        """Прервать загрузку до записи порции, превышающей лимит импорта."""
         if self.tell() + len(data) > MAX_IMPORT_BYTES:
             raise BotError("YAML не должен превышать 128 КиБ.")
         return super().write(data)
 
 
 def command_parts(text: str) -> tuple[str, str]:
+    """Выделить команду без @username и оставшийся аргумент.
+
+    Проверку адресата выполняет TelegramHandler.message до вызова сервиса.
+    """
     parts = text.strip().split(maxsplit=1)
     return (parts[0].split("@", 1)[0].lower() if parts else "", parts[1].strip() if len(parts) > 1 else "")
 
 
 class TelegramHandler:
+    """Переводить Telegram-события в вызовы сервисов и отправлять их ответы.
+
+    Сервисы отвечают за права, транзакции и состояние. Здесь остаются детали
+    Telegram: автор сообщения, скачивание файла, клавиатура и уведомления.
+    """
+
     def __init__(self, db, config):
+        """Создать сервисы с общей БД и настройками доступа."""
         self.bindings = Bindings(db, config.owner_telegram_id)
         self.programs = Programs(db, config.owner_telegram_id)
         self.training = Training(db)
 
     async def send(self, message, reply):
+        """Отправить ответ частями, разместив кнопки только под последней частью."""
         if isinstance(reply, str):
             reply = Reply(reply)
         markup = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=label, callback_data=token) for label, token in row] for row in reply.buttons]) if reply.buttons else None
@@ -50,6 +65,11 @@ class TelegramHandler:
         await message.answer(text, reply_markup=markup)
 
     async def message(self, message: Message) -> None:
+        """Обработать известную команду или сообщение, похожее на результат.
+
+        Обычная переписка группы игнорируется. BotError можно показать человеку;
+        техническая ошибка БД получает общее сообщение без SQL и параметров.
+        """
         # Анонимные администраторы/sender_chat не являются Telegram identity спортсмена.
         if message.from_user is None or message.from_user.is_bot or message.sender_chat:
             return
@@ -58,6 +78,7 @@ class TelegramHandler:
         try:
             head = (message.text or message.caption or "").strip().split(maxsplit=1)
             if head and head[0].startswith("/") and "@" in head[0]:
+                # В группе могут жить другие боты; /next@other_bot нам не адресована.
                 target = head[0].split("@", 1)[1].lower()
                 me = await message.bot.me()
                 if target != (me.username or "").lower():
@@ -79,6 +100,8 @@ class TelegramHandler:
             elif command == "/whoami":
                 reply = self.bindings.whoami(chat_id, user_id)
             elif command == "/import_program":
+                # Проверяем доступ до сетевой загрузки файла, а размер — дважды:
+                # по метаданным Telegram и по реально полученным байтам в буфере.
                 self.programs.authorize(chat_id, user_id)
                 if message.document is None or not message.document.file_size or message.document.file_size > MAX_IMPORT_BYTES:
                     raise BotError("Прикрепите YAML до 128 КиБ с подписью /import_program.")
@@ -92,11 +115,14 @@ class TelegramHandler:
             elif command in ("/next", "/choose", "/skip", "/undo", "/finish_train"):
                 reply = self.training.command(chat_id, user_id, message.message_id, command)
             elif message.text and not command.startswith("/"):
+                # Это лишь предварительный фильтр; полный разбор делает parse_result.
                 if not re.match(r"^\s*[+-]?\d+\s*[*xх×]", message.text):
                     return
                 reply = self.training.save_result(chat_id, user_id, message.message_id, message.text)
             else:
                 return
+            # К этому моменту сервис уже вышел из транзакции: результат сохранён
+            # даже если отправка подтверждения в Telegram затем не удастся.
             await self.send(message, reply)
         except BotError as exc:
             if command == "/import_program":
@@ -108,6 +134,7 @@ class TelegramHandler:
             await message.answer("Не удалось выполнить действие. Повторите позже или проверьте /status.")
 
     async def callback(self, callback: CallbackQuery) -> None:
+        """Передать токен кнопки сервису и снять индикатор ожидания в Telegram."""
         if callback.from_user.is_bot or not isinstance(callback.message, Message) or not callback.data or not callback.data.startswith("a:"):
             return
         try:
@@ -123,6 +150,7 @@ class TelegramHandler:
 
 
 def create_dispatcher(db, config) -> Dispatcher:
+    """Зарегистрировать обработчики сообщений и кнопок в одном Router."""
     handler = TelegramHandler(db, config)
     router = Router()
     router.message.register(handler.message)

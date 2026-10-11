@@ -9,9 +9,12 @@ from app.db.models import Base
 
 
 def run() -> None:
+    """Применить миграции к DATABASE_PATH с настройками SQLite из приложения."""
     database = Database(os.environ.get("DATABASE_PATH", "data/gymbot.sqlite3"))
     try:
         with database.engine.connect() as connection:
+            # metadata позволяет Alembic сравнить ORM-модели с реальной схемой.
+            # batch-режим нужен SQLite для изменений через пересоздание таблицы.
             context.configure(connection=connection, target_metadata=Base.metadata, render_as_batch=True)
             with context.begin_transaction():
                 context.run_migrations()

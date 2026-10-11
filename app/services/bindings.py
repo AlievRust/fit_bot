@@ -11,11 +11,19 @@ logger = logging.getLogger(__name__)
 
 
 class Bindings:
+    """Настраивать доступ к группе и связь Telegram id со спортсменами."""
+
     def __init__(self, db, owner_id: int):
+        """Получить доступ к БД и id владельца из проверенной конфигурации."""
         self.db = db
         self.owner_id = owner_id
 
     def setup(self, chat_id: int, user_id: int, chat_type: str) -> str:
+        """Назначить тренировочную группу по команде владельца.
+
+        Перенос в другую группу запрещён, пока существует активная тренировка.
+        Это сохраняет возможность завершить сессию в прежнем чате.
+        """
         require_owner(self.owner_id, user_id)
         if chat_type not in ("group", "supergroup"):
             raise BotError("Выполните /setup_group в тренировочной группе.")
@@ -32,6 +40,11 @@ class Bindings:
         return "Группа настроена. Владелец может загрузить YAML с подписью /import_program."
 
     def bind(self, chat_id: int, user_id: int, key: str, username=None, first_name=None) -> str:
+        """Привязать автора команды к свободному спортсмену в настроенной группе.
+
+        user_id передаёт Telegram-адаптер из сообщения; аргумент команды задаёт
+        только athlete_key. Username и имя сохраняются как справочные поля.
+        """
         with self.db.transaction() as s:
             require_chat(s, chat_id)
             athlete = s.scalar(select(Athlete).where(Athlete.key == key, Athlete.active.is_(True)))
@@ -47,6 +60,10 @@ class Bindings:
         return f"Вы привязаны к {name}."
 
     def unbind(self, chat_id: int, user_id: int, key: str | None = None) -> str:
+        """Снять свою привязку либо, для владельца, привязку указанного спортсмена.
+
+        Удаляется только Binding: Athlete и его результаты остаются в БД.
+        """
         if key is not None:
             require_owner(self.owner_id, user_id)
         with self.db.transaction() as s:
@@ -62,12 +79,14 @@ class Bindings:
         return "Привязка снята. Результаты тренировок сохранены."
 
     def whoami(self, chat_id: int, user_id: int) -> str:
+        """Показать Telegram id автора и его текущую привязку."""
         with self.db.transaction() as s:
             require_chat(s, chat_id)
             athlete = s.scalar(select(Athlete).join(Binding).where(Binding.telegram_user_id == user_id))
             return f"Telegram id: {user_id}\nСпортсмен: {athlete.display_name} ({athlete.key})" if athlete else f"Telegram id: {user_id}\nВы не привязаны: /bind <athlete_key>."
 
     def inspect(self, chat_id: int, user_id: int) -> str:
+        """Показать владельцу все привязки в настроенной группе."""
         require_owner(self.owner_id, user_id)
         with self.db.transaction() as s:
             require_chat(s, chat_id)

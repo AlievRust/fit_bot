@@ -12,24 +12,35 @@ logger = logging.getLogger(__name__)
 
 
 class Programs:
+    """Проверять доступ и сохранять версии программы одной транзакцией."""
+
     def __init__(self, db, owner_id: int):
+        """Сохранить БД и id владельца, которому разрешён импорт."""
         self.db = db
         self.owner_id = owner_id
 
     def authorize(self, chat_id: int, user_id: int) -> None:
+        """Проверить владельца и чат до скачивания или разбора файла."""
         require_owner(self.owner_id, user_id)
         with self.db.transaction() as s:
             require_chat(s, chat_id)
 
     def import_yaml(self, chat_id: int, user_id: int, data: bytes) -> str:
+        """Проверить YAML, создать его версию и сделать её активной.
+
+        Существующие планы не перезаписываются. Активная тренировка сохраняет
+        ссылки на прежнюю версию; ошибка записи откатывает весь импорт.
+        """
         self.authorize(chat_id, user_id)
         document = parse_program(data)
+        # Проверка документа завершена до начала транзакции записи.
         with self.db.transaction() as s:
             require_chat(s, chat_id)
             info = document.program
             if s.scalar(select(Program.id).where(Program.key == info.key, Program.version == info.version)):
                 raise BotError("Эта версия программы уже импортирована. Увеличьте version.")
             athletes = {}
+            # Стабильный key сохраняет athlete.id, привязки и историю результатов.
             for item in document.athletes:
                 athlete = s.scalar(select(Athlete).where(Athlete.key == item.key))
                 if athlete is None:
@@ -39,8 +50,10 @@ class Programs:
                 athlete.display_name = item.display_name
                 athletes[item.key] = athlete.id
             s.execute(update(Program).where(Program.active.is_(True)).values(active=False))
+            # Деактивация старой версии и создание новой фиксируются вместе.
             program = Program(key=info.key, name=info.name, version=info.version, schema_version=document.schema_version)
             s.add(program)
+            # flush получает id для внешних ключей, но ещё не делает commit.
             s.flush()
             for order, day_info in enumerate(document.days, 1):
                 day = Day(program_id=program.id, key=day_info.key, name=day_info.name, order=order)
