@@ -22,3 +22,9 @@ CP-08 завершён: `changes/archive/2026-10-09-0002-weight-in-grams/`.
 `changes/archive/2026-10-12-0003-extra-working-sets/`.
 После индивидуального плана результат сохраняется с planned_set_number=NULL;
 плановый счётчик, отмена и приоритет истории сохранены. Полный pytest — 86 PASS.
+
+CHG-0004 завершён: `changes/archive/2026-10-23-0004-training-history-export/`.
+Владелец в личном диалоге получает Markdown/JSON за 42 суток либо всю историю
+через `/export json all`. Соединение SQLite read-only, без миграций и изменения
+состояния; legacy и farmer carry имеют явную семантику. Полный pytest — 122 PASS.
+Контракт форматов, примеры и ручная проверка — docs/history_export.md.

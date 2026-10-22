@@ -5,11 +5,13 @@ import re
 from io import BytesIO
 
 from aiogram import Dispatcher, Router
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.exceptions import TelegramAPIError
+from aiogram.types import BufferedInputFile, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.services.access import BotError
 from app.services.bindings import Bindings
+from app.services.export import HistoryExport
 from app.services.programs import Programs
 from app.parsers.program import MAX_IMPORT_BYTES
 from app.services.training import Training
@@ -49,6 +51,23 @@ class TelegramHandler:
         self.bindings = Bindings(db, config.owner_telegram_id)
         self.programs = Programs(db, config.owner_telegram_id)
         self.training = Training(db)
+        self.history_export = HistoryExport(db, config.owner_telegram_id)
+
+    async def export_document(self, message: Message, argument: str) -> None:
+        """Выслать файл в личный диалог; ошибка доставки не затрагивает БД."""
+        document = self.history_export.generate(message.from_user.id, message.chat.type, argument)
+        try:
+            await message.answer_document(BufferedInputFile(document.content, filename=document.filename))
+        except TelegramAPIError:
+            # Исключение API может содержать URL/параметры: в лог идёт только событие.
+            logger.warning("event=export_delivery_failure")
+            try:
+                await message.answer(
+                    "Не удалось отправить файл экспорта. Проверьте, что бот не заблокирован, "
+                    "и повторите команду в личном диалоге позже."
+                )
+            except TelegramAPIError:
+                logger.warning("event=export_error_notification_failure")
 
     async def send(self, message, reply):
         """Отправить ответ частями, разместив кнопки только под последней частью."""
@@ -83,7 +102,10 @@ class TelegramHandler:
                 me = await message.bot.me()
                 if target != (me.username or "").lower():
                     return
-            if command == "/setup_group":
+            if command == "/export":
+                await self.export_document(message, arg)
+                return
+            elif command == "/setup_group":
                 reply = self.bindings.setup(chat_id, user_id, message.chat.type)
             elif command == "/bind":
                 if not arg or len(arg.split()) != 1:
