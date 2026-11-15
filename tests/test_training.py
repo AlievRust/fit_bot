@@ -31,9 +31,9 @@ def training(db):
 
 
 def test_independent_progress_persistence_and_restart(db, training):
-    training.save_result(-100, 2, 1, "8*50")
-    training.save_result(-100, 2, 2, "8*52.5")
-    training.save_result(-100, 3, 3, "10*30")
+    training.save_result(-100, 2, 1, "50*8")
+    training.save_result(-100, 2, 2, "52.5*8")
+    training.save_result(-100, 3, 3, "30*10")
     card = training.status(-100, 2).text
     assert "xRust — подход 3/4" in card
     assert "Tim — подход 2/3" in card
@@ -49,26 +49,35 @@ def test_independent_progress_persistence_and_restart(db, training):
 def test_access_and_duplicate(db, training):
     for chat, user in [(-999, 2), (-100, 4)]:
         with pytest.raises(BotError):
-            training.save_result(chat, user, 1, "8*50")
+            training.save_result(chat, user, 1, "50*8")
     with db.transaction() as s:
         s.add(Athlete(key="other", display_name="Другой"))
     Bindings(db, 1).bind(-100, 4, "other")
     with pytest.raises(BotError):
-        training.save_result(-100, 4, 1, "8*50")
-    training.save_result(-100, 2, 1, "8*50")
-    assert "уже обработано" in training.save_result(-100, 2, 1, "8*50").text
+        training.save_result(-100, 4, 1, "50*8")
+    training.save_result(-100, 2, 1, "50*8")
+    assert "уже обработано" in training.save_result(-100, 2, 1, "50*8").text
     with db.transaction() as s:
         assert s.scalar(select(func.count()).select_from(Result)) == 1
 
 
 def test_extra_set_after_four_planned_sets(db, training):
     for i in range(4):
-        training.save_result(-100, 2, i + 1, "8*50")
-    reply = training.save_result(-100, 2, 5, "8*50")
+        training.save_result(-100, 2, i + 1, "50*8")
+    reply = training.save_result(-100, 2, 5, "50*8")
     assert "xRust: дополнительный подход" in reply.text
     assert "план выполнен 4/4" in training.status(-100, 2).text
     with db.transaction() as s:
         assert s.scalars(select(Result.planned_set_number).order_by(Result.id)).all() == [1, 2, 3, 4, None]
+
+
+@pytest.mark.parametrize("rating", ["легко", "норм", "тяжело"])
+def test_previous_result_shows_saved_rating(training, rating):
+    training.save_result(-100, 2, 1, f"32.125*8 {rating}")
+    press(training, training.command(-100, 2, 20, "/finish_train"), "Завершить")
+    reply = press(training, training.start_choices(-100, 2), "Вторник")
+    card = press(training, reply, "Начать")
+    assert f"Прошлый раз: 32.125 кг × 8 — {rating}" in card.text
 
 
 def test_no_session_and_no_second_session(db, training):
@@ -76,7 +85,7 @@ def test_no_session_and_no_second_session(db, training):
     with db.transaction() as s:
         s.scalar(select(TrainingSession)).status = "completed"
     with pytest.raises(BotError):
-        training.save_result(-100, 2, 9, "8*50")
+        training.save_result(-100, 2, 9, "50*8")
 
 
 def test_callback_bound_to_author_and_chat(training):

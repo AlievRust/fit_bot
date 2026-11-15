@@ -8,7 +8,7 @@ from tests.test_training import press, training
 
 
 def test_next_confirmation_preserves_progress(training):
-    training.save_result(-100, 2, 1, "8*50")
+    training.save_result(-100, 2, 1, "50*8")
     reply = training.command(-100, 2, 10, "/next")
     assert "Не завершили" in reply.text
     assert "Жим" in training.status(-100, 2).text
@@ -27,27 +27,27 @@ def test_stale_and_foreign_confirmations(training):
         training.callback(-100, 3, token)
     with pytest.raises(BotError):
         training.callback(-999, 2, token)
-    training.save_result(-100, 2, 1, "8*50")
+    training.save_result(-100, 2, 1, "50*8")
     with pytest.raises(BotError, match="изменилось"):
         training.callback(-100, 2, token)
 
 
 def test_undo_author_only_soft_delete_and_no_replay(db, training):
-    training.save_result(-100, 2, 1, "8*50")
-    training.save_result(-100, 2, 2, "8*55")
-    training.save_result(-100, 3, 3, "10*30")
+    training.save_result(-100, 2, 1, "50*8")
+    training.save_result(-100, 2, 2, "55*8")
+    training.save_result(-100, 3, 3, "30*10")
     training.command(-100, 2, 10, "/undo")
     with db.transaction() as s:
         rows = s.scalars(select(Result).order_by(Result.id)).all()
         assert [r.deleted_at is not None for r in rows] == [False, True, False]
     assert "уже обработано" in training.command(-100, 2, 10, "/undo").text
-    assert "уже обработано" in training.save_result(-100, 2, 2, "8*55").text
-    training.save_result(-100, 2, 4, "8*52.5")
+    assert "уже обработано" in training.save_result(-100, 2, 2, "55*8").text
+    training.save_result(-100, 2, 4, "52.5*8")
     assert "подход 3/4" in training.status(-100, 2).text
 
 
 def test_finish_restart_and_old_button(db, training):
-    training.save_result(-100, 2, 1, "8*50")
+    training.save_result(-100, 2, 1, "50*8")
     old = training.command(-100, 2, 10, "/next")
     finish = training.command(-100, 2, 11, "/finish_train")
     assert "active" == _session_status(db)
@@ -72,21 +72,21 @@ def test_skip_and_revisit(db, training):
         assert s.scalar(select(func.count()).select_from(SkippedExercise)) == 1
     reply = training.command(-100, 2, 11, "/choose")
     press(training, reply, "Жим")
-    training.save_result(-100, 2, 1, "8*50")
+    training.save_result(-100, 2, 1, "50*8")
     training.command(-100, 2, 12, "/skip")
     training.command(-100, 2, 13, "/skip")
     with pytest.raises(BotError, match="пропущено"):
-        training.save_result(-100, 2, 2, "8*50")
+        training.save_result(-100, 2, 2, "50*8")
 
 
 def test_history_same_set_and_fallback(training):
-    training.save_result(-100, 2, 1, "8*50")
-    training.save_result(-100, 2, 2, "7*55")
+    training.save_result(-100, 2, 1, "50*8")
+    training.save_result(-100, 2, 2, "55*7")
     press(training, training.command(-100, 2, 10, "/finish_train"), "Завершить")
     reply = press(training, training.start_choices(-100, 2), "Вторник")
     press(training, reply, "Начать")
-    assert "Прошлый раз: 8×50 кг" in training.status(-100, 2).text
-    training.save_result(-100, 2, 3, "8*52.5")
-    assert "Прошлый раз: 7×55 кг" in training.status(-100, 2).text
-    training.save_result(-100, 2, 4, "8*57.5")
-    assert "Прошлый раз: 7×55 кг" in training.status(-100, 2).text
+    assert "Прошлый раз: 50 кг × 8" in training.status(-100, 2).text
+    training.save_result(-100, 2, 3, "52.5*8")
+    assert "Прошлый раз: 55 кг × 7" in training.status(-100, 2).text
+    training.save_result(-100, 2, 4, "57.5*8")
+    assert "Прошлый раз: 55 кг × 7" in training.status(-100, 2).text

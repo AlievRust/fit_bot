@@ -94,7 +94,10 @@ class Training:
         result = s.scalar(query.where(Result.planned_set_number == number).limit(1))
         if result is None:
             result = s.scalar(query.limit(1))
-        return f"{result.reps}×{format_weight_kg(result.weight_g)} кг" if result else "нет истории"
+        if result is None:
+            return "нет истории"
+        rating = {"easy": "легко", "normal": "норм", "hard": "тяжело"}.get(result.subjective_rating)
+        return f"{format_weight_kg(result.weight_g)} кг × {result.reps}" + (f" — {rating}" if rating else "")
 
     def _hint(self, s, training, exercise, athlete):
         """Сформировать индивидуальный план следующего подхода и прошлый результат."""
@@ -119,7 +122,7 @@ class Training:
         hints = "\n\n".join(self._hint(s, training, exercise, athlete) for athlete in athletes)
         if s.get(SkippedExercise, (training.id, exercise.id)):
             hints = "Упражнение пропущено. Для возврата: /choose.\n\n" + hints
-        return Reply(f"{program.name} · {day.name}\n🏋️ {exercise.exercise_name}\nУпражнение {index}/{len(exercises)}\n\n{hints}\n\nРезультат: повторы*вес, например 8*50\n/next · /choose · /skip · /undo · /finish_train")
+        return Reply(f"{program.name} · {day.name}\n🏋️ {exercise.exercise_name}\nУпражнение {index}/{len(exercises)}\n\n{hints}\n\nРезультат: вес*повторы, например 50*8\n/next · /choose · /skip · /undo · /finish_train")
 
     def start_choices(self, chat_id, user_id):
         """Вернуть существующую тренировку либо меню дней активной программы.
@@ -244,7 +247,7 @@ class Training:
             training.revision += 1
             s.flush()
             label = "дополнительный подход — " if planned_set_number is None else ""
-            reply = Reply(f"✓ {athlete.display_name}: {label}{parsed.reps}×{format_weight_kg(weight_g)} кг\n\n" + self._hint(s, training, exercise, athlete))
+            reply = Reply(f"✓ {athlete.display_name}: {label}{format_weight_kg(weight_g)} кг × {parsed.reps}\n\n" + self._hint(s, training, exercise, athlete))
         logger.info("event=set_result_saved chat_id=%s session_id=%s athlete_id=%s message_id=%s", chat_id, training.id, athlete.id, message_id)
         return reply
 
@@ -355,7 +358,7 @@ class Training:
                 exercise = s.get(Exercise, result.program_exercise_id)
                 reply = self._card(s, training)
                 label = "дополнительный подход" if result.planned_set_number is None else f"подход {result.planned_set_number}"
-                reply.text = f"Отменён ваш {label}: {exercise.exercise_name}, {result.reps}×{format_weight_kg(result.weight_g)} кг.\n\n" + reply.text
+                reply.text = f"Отменён ваш {label}: {exercise.exercise_name}, {format_weight_kg(result.weight_g)} кг × {result.reps}.\n\n" + reply.text
                 return reply
             if command == "/finish_train":
                 button = self._session_button(s, training, user_id, "Завершить тренировку", "finish")

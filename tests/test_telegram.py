@@ -16,7 +16,7 @@ from app.services.access import BotError
 from tests.test_training import training
 
 
-def fake_message(user=2, chat=-100, text="8*50", message_id=50, **extra):
+def fake_message(user=2, chat=-100, text="50*8", message_id=50, **extra):
     return Message(message_id=message_id, date=0, chat=Chat(id=chat, type="supergroup"), from_user=User(id=user, is_bot=False, first_name="Спортсмен"), text=text, **extra)
 
 
@@ -25,13 +25,21 @@ def test_adapter_result_and_ordinary_chat(db, training, monkeypatch):
     answer = AsyncMock()
     monkeypatch.setattr(Message, "answer", answer)
     asyncio.run(handler.message(fake_message(text="хорошая тренировка")))
-    asyncio.run(handler.message(fake_message(text="я сделал 8*50")))
+    asyncio.run(handler.message(fake_message(text="я сделал 50*8")))
     answer.assert_not_called()
     asyncio.run(handler.message(fake_message()))
     assert "✓ xRust" in answer.call_args.args[0]
     assert "подход 2/4" in training.status(-100, 2).text
     asyncio.run(handler.message(fake_message(user=3, chat=-999)))
     assert "чат не настроен" in answer.call_args.args[0]
+
+
+def test_decimal_weight_reaches_parser(db, training, monkeypatch):
+    handler = TelegramHandler(db, Config(bot_token="123:secret", owner_telegram_id=1))
+    answer = AsyncMock()
+    monkeypatch.setattr(Message, "answer", answer)
+    asyncio.run(handler.message(fake_message(text="32,125*8 тяжело")))
+    assert "32.125 кг × 8" in answer.call_args.args[0]
 
 
 def test_reply_cannot_bind_another_user(db, training, monkeypatch):

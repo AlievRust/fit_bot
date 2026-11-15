@@ -81,8 +81,8 @@ JSON имеет `schema_version: 1`. Вес `weight_kg` — **десятична
         "display_name": "xRust",
         "plans": [{"planned_set_number": 1, "reps_min": 8, "reps_max": 8, "target_rir": 3}],
         "results": [
-          {"order": 1, "created_at": "2026-10-21T10:05:00Z", "type": "planned", "planned_set_number": 1, "reps": 8, "weight_kg": "50", "subjective_rating": null},
-          {"order": 2, "created_at": "2026-10-21T10:08:00Z", "type": "extra", "planned_set_number": null, "reps": 10, "weight_kg": "32.125", "subjective_rating": "hard"}
+          {"order": 1, "created_at": "2026-10-21T10:05:00Z", "type": "planned", "planned_set_number": 1, "weight_kg": "50", "reps": 8, "subjective_rating": null},
+          {"order": 2, "created_at": "2026-10-21T10:08:00Z", "type": "extra", "planned_set_number": null, "weight_kg": "32.125", "reps": 10, "subjective_rating": "hard"}
         ]
       }]
     }]
@@ -114,8 +114,8 @@ JSON имеет `schema_version: 1`. Вес `weight_kg` — **десятична
 
 | Подход | План | Факт (порядок записи) |
 |---|---|---|
-| Плановый №1 | 8 повт.; RIR 3 | 8 повт. × 50 кг (№1) |
-| Дополнительный (extra) | — | 10 повт. × 32.125 кг; тяжело (№2) |
+| Плановый №1 | 8 повт.; RIR 3 | 50 кг × 8 повт. (№1) |
+| Дополнительный (extra) | — | 32.125 кг × 10 повт.; тяжело (№2) |
 ```
 
 ## Ручная проверка через Telegram

@@ -33,11 +33,11 @@ def naive(value):
 def history(db, training):
     """Плановые/extra, отмена, пропуск и legacy без плана в одной БД."""
     for number in range(1, 5):
-        training.save_result(-100, 2, number, "8*50")
-    training.save_result(-100, 2, 5, "10*32.125 тяжело")
-    training.save_result(-100, 3, 6, "10*30")
+        training.save_result(-100, 2, number, "50*8")
+    training.save_result(-100, 2, 5, "32.125*10 тяжело")
+    training.save_result(-100, 3, 6, "30*10")
     training.command(-100, 3, 7, "/undo")
-    training.save_result(-100, 3, 8, "10*1")
+    training.save_result(-100, 3, 8, "1*10")
     with db.transaction() as s:
         current = s.scalar(select(TrainingSession))
         current.started_at = naive(NOW - timedelta(days=1, hours=1))
@@ -168,9 +168,9 @@ def test_markdown_plan_fact_unicode_and_units(db, history):
     text = report.content.decode("utf-8")
     assert "## 2026-10-21" in text
     assert r"Рустам \| \*спорт\* 🏋️" in text
-    assert "| Плановый №2 | 6–8 повт.; RIR 3 | 8 повт. × 50 кг (№2) |" in text
-    assert "Дополнительный (extra) | — | 10 повт. × 32.125 кг; тяжело (№5)" in text
-    assert "10 повт. × 30 кг" not in text
+    assert "| Плановый №2 | 6–8 повт.; RIR 3 | 50 кг × 8 повт. (№2) |" in text
+    assert "Дополнительный (extra) | — | 32.125 кг × 10 повт.; тяжело (№5)" in text
+    assert "30 кг × 10 повт." not in text
     assert "Пропущено всей группой." in text
     assert "RIR не задан" in text
     # Legacy в пределах периода также экспортируется обычной командой.
@@ -179,7 +179,7 @@ def test_markdown_plan_fact_unicode_and_units(db, history):
         old.finished_at = naive(NOW - timedelta(days=2))
     text = history.generate(1, "private", "chatgpt", now=NOW).content.decode()
     assert "Исторический без номера плана" in text
-    assert "40 м × 32.125 кг на одну гантель" in text
+    assert "32.125 кг на одну гантель × 40 м" in text
     assert len(payload(history)["sessions"]) == 2
 
 

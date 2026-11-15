@@ -138,7 +138,7 @@ class TelegramHandler:
                 reply = self.training.command(chat_id, user_id, message.message_id, command)
             elif message.text and not command.startswith("/"):
                 # Это лишь предварительный фильтр; полный разбор делает parse_result.
-                if not re.match(r"^\s*[+-]?\d+\s*[*xх×]", message.text):
+                if not re.match(r"^\s*[+-]?\d+(?:[.,]\d+)?\s*[*xх×]", message.text):
                     return
                 reply = self.training.save_result(chat_id, user_id, message.message_id, message.text)
             else:

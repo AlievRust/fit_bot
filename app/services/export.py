@@ -187,8 +187,8 @@ class HistoryExport:
                     )
                     facts.append({
                         "order": order, "created_at": iso_utc(result["created_at"]), "type": kind,
-                        "planned_set_number": number, "reps": result["reps"],
-                        "weight_kg": weight_kg(result["weight_g"]),
+                        "planned_set_number": number, "weight_kg": weight_kg(result["weight_g"]),
+                        "reps": result["reps"],
                         "subjective_rating": result["subjective_rating"],
                     })
                 entry["athletes"].append({
@@ -204,7 +204,7 @@ def result_text(result: dict, units: dict) -> str:
     reps_unit = "м" if units["reps"] == "m" else "повт."
     scope = " на одну гантель" if units["weight_scope"] == "per_dumbbell" else ""
     rating = {"easy": "легко", "normal": "норм", "hard": "тяжело"}.get(result["subjective_rating"])
-    return (f"{result['reps']} {reps_unit} × {result['weight_kg']} кг{scope}"
+    return (f"{result['weight_kg']} кг{scope} × {result['reps']} {reps_unit}"
             + (f"; {rating}" if rating else ""))
 
 
